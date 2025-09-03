@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
 import { unlink, rmdir } from 'fs/promises';
@@ -8,6 +8,22 @@ import app from '../src/server.js';
 
 const TEST_DATA_DIR = path.join(process.cwd(), 'data');
 const TEST_TASKS_FILE = path.join(TEST_DATA_DIR, 'tasks.json');
+
+let server;
+
+// Set up server for testing
+before(async () => {
+  server = app.listen(0); // Use port 0 to get any available port
+});
+
+// Clean up server after testing
+after(async () => {
+  if (server) {
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+  }
+});
 
 // Clean up test data before and after each test
 beforeEach(async () => {
@@ -34,7 +50,7 @@ async function cleanupTestData() {
 describe('Task API', () => {
   describe('GET /api/health', () => {
     it('should return health status', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/health')
         .expect(200);
 
@@ -46,7 +62,7 @@ describe('Task API', () => {
 
   describe('GET /api/tasks', () => {
     it('should return empty array when no tasks exist', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/tasks')
         .expect(200);
 
@@ -56,7 +72,7 @@ describe('Task API', () => {
 
     it('should return all tasks', async () => {
       // Create a task first
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({
           title: 'Test Task',
@@ -65,7 +81,7 @@ describe('Task API', () => {
         .expect(201);
 
       // Get all tasks
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/tasks')
         .expect(200);
 
@@ -78,24 +94,24 @@ describe('Task API', () => {
 
     it('should filter tasks by status - active', async () => {
       // Create completed and active tasks
-      await request(app)
+      await request(server)
         .post('/api/tasks')
         .send({ title: 'Active Task' })
         .expect(201);
 
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({ title: 'Completed Task' })
         .expect(201);
 
       // Mark second task as completed
-      await request(app)
+      await request(server)
         .put(`/api/tasks/${createResponse.body.data.id}`)
         .send({ completed: true })
         .expect(200);
 
       // Get active tasks only
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/tasks?status=active')
         .expect(200);
 
@@ -107,24 +123,24 @@ describe('Task API', () => {
 
     it('should filter tasks by status - completed', async () => {
       // Create completed and active tasks
-      await request(app)
+      await request(server)
         .post('/api/tasks')
         .send({ title: 'Active Task' })
         .expect(201);
 
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({ title: 'Completed Task' })
         .expect(201);
 
       // Mark second task as completed
-      await request(app)
+      await request(server)
         .put(`/api/tasks/${createResponse.body.data.id}`)
         .send({ completed: true })
         .expect(200);
 
       // Get completed tasks only
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/tasks?status=completed')
         .expect(200);
 
@@ -137,7 +153,7 @@ describe('Task API', () => {
 
   describe('GET /api/tasks/stats', () => {
     it('should return statistics for empty task list', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/tasks/stats')
         .expect(200);
 
@@ -152,29 +168,29 @@ describe('Task API', () => {
 
     it('should return correct statistics', async () => {
       // Create tasks
-      const task1 = await request(app)
+      const task1 = await request(server)
         .post('/api/tasks')
         .send({ title: 'Task 1' })
         .expect(201);
 
-      const task2 = await request(app)
+      const task2 = await request(server)
         .post('/api/tasks')
         .send({ title: 'Task 2' })
         .expect(201);
 
-      const task3 = await request(app)
+      const task3 = await request(server)
         .post('/api/tasks')
         .send({ title: 'Task 3' })
         .expect(201);
 
       // Mark one as completed
-      await request(app)
+      await request(server)
         .put(`/api/tasks/${task2.body.data.id}`)
         .send({ completed: true })
         .expect(200);
 
       // Get stats
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/tasks/stats')
         .expect(200);
 
@@ -188,7 +204,7 @@ describe('Task API', () => {
 
   describe('GET /api/tasks/:id', () => {
     it('should return 404 for non-existent task', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/tasks/non-existent-id')
         .expect(404);
 
@@ -198,7 +214,7 @@ describe('Task API', () => {
 
     it('should return specific task', async () => {
       // Create a task
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({
           title: 'Specific Task',
@@ -207,7 +223,7 @@ describe('Task API', () => {
         .expect(201);
 
       // Get the specific task
-      const response = await request(app)
+      const response = await request(server)
         .get(`/api/tasks/${createResponse.body.data.id}`)
         .expect(200);
 
@@ -220,7 +236,7 @@ describe('Task API', () => {
 
   describe('POST /api/tasks', () => {
     it('should create a new task with title only', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/tasks')
         .send({ title: 'New Task' })
         .expect(201);
@@ -236,7 +252,7 @@ describe('Task API', () => {
     });
 
     it('should create a new task with title and description', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/tasks')
         .send({
           title: 'New Task',
@@ -251,7 +267,7 @@ describe('Task API', () => {
     });
 
     it('should return 400 for empty title', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/tasks')
         .send({ title: '' })
         .expect(400);
@@ -262,7 +278,7 @@ describe('Task API', () => {
     });
 
     it('should return 400 for missing title', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/tasks')
         .send({ description: 'No title' })
         .expect(400);
@@ -273,7 +289,7 @@ describe('Task API', () => {
 
     it('should return 400 for title too long', async () => {
       const longTitle = 'a'.repeat(201);
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/tasks')
         .send({ title: longTitle })
         .expect(400);
@@ -284,7 +300,7 @@ describe('Task API', () => {
 
     it('should return 400 for description too long', async () => {
       const longDescription = 'a'.repeat(1001);
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/tasks')
         .send({
           title: 'Valid title',
@@ -297,7 +313,7 @@ describe('Task API', () => {
     });
 
     it('should trim whitespace from title and description', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/tasks')
         .send({
           title: '  Trimmed Title  ',
@@ -313,7 +329,7 @@ describe('Task API', () => {
   describe('PUT /api/tasks/:id', () => {
     it('should update an existing task', async () => {
       // Create a task
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({
           title: 'Original Title',
@@ -322,7 +338,7 @@ describe('Task API', () => {
         .expect(201);
 
       // Update the task
-      const response = await request(app)
+      const response = await request(server)
         .put(`/api/tasks/${createResponse.body.data.id}`)
         .send({
           title: 'Updated Title',
@@ -342,7 +358,7 @@ describe('Task API', () => {
     });
 
     it('should return 404 for non-existent task', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .put('/api/tasks/non-existent-id')
         .send({ title: 'Updated Title' })
         .expect(404);
@@ -353,13 +369,13 @@ describe('Task API', () => {
 
     it('should validate updated data', async () => {
       // Create a task
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({ title: 'Original Title' })
         .expect(201);
 
       // Try to update with invalid data
-      const response = await request(app)
+      const response = await request(server)
         .put(`/api/tasks/${createResponse.body.data.id}`)
         .send({ title: '' })
         .expect(400);
@@ -370,7 +386,7 @@ describe('Task API', () => {
 
     it('should update only specified fields', async () => {
       // Create a task
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({
           title: 'Original Title',
@@ -379,7 +395,7 @@ describe('Task API', () => {
         .expect(201);
 
       // Update only completion status
-      const response = await request(app)
+      const response = await request(server)
         .put(`/api/tasks/${createResponse.body.data.id}`)
         .send({ completed: true })
         .expect(200);
@@ -393,13 +409,13 @@ describe('Task API', () => {
   describe('DELETE /api/tasks/:id', () => {
     it('should delete an existing task', async () => {
       // Create a task
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({ title: 'Task to Delete' })
         .expect(201);
 
       // Delete the task
-      const response = await request(app)
+      const response = await request(server)
         .delete(`/api/tasks/${createResponse.body.data.id}`)
         .expect(200);
 
@@ -407,13 +423,13 @@ describe('Task API', () => {
       assert.strictEqual(response.body.message, 'Task deleted successfully');
 
       // Verify task is gone
-      await request(app)
+      await request(server)
         .get(`/api/tasks/${createResponse.body.data.id}`)
         .expect(404);
     });
 
     it('should return 404 for non-existent task', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .delete('/api/tasks/non-existent-id')
         .expect(404);
 
@@ -425,7 +441,7 @@ describe('Task API', () => {
   describe('Integration Tests', () => {
     it('should handle complete task lifecycle', async () => {
       // Create task
-      const createResponse = await request(app)
+      const createResponse = await request(server)
         .post('/api/tasks')
         .send({
           title: 'Lifecycle Task',
@@ -436,14 +452,14 @@ describe('Task API', () => {
       const taskId = createResponse.body.data.id;
 
       // Get task
-      const getResponse = await request(app)
+      const getResponse = await request(server)
         .get(`/api/tasks/${taskId}`)
         .expect(200);
 
       assert.strictEqual(getResponse.body.data.title, 'Lifecycle Task');
 
       // Update task
-      const updateResponse = await request(app)
+      const updateResponse = await request(server)
         .put(`/api/tasks/${taskId}`)
         .send({
           title: 'Updated Lifecycle Task',
@@ -455,12 +471,12 @@ describe('Task API', () => {
       assert.strictEqual(updateResponse.body.data.completed, true);
 
       // Delete task
-      await request(app)
+      await request(server)
         .delete(`/api/tasks/${taskId}`)
         .expect(200);
 
       // Verify deletion
-      await request(app)
+      await request(server)
         .get(`/api/tasks/${taskId}`)
         .expect(404);
     });
@@ -469,7 +485,7 @@ describe('Task API', () => {
       // Create multiple tasks
       const tasks = [];
       for (let i = 1; i <= 5; i++) {
-        const response = await request(app)
+        const response = await request(server)
           .post('/api/tasks')
           .send({ title: `Task ${i}` })
           .expect(201);
@@ -477,18 +493,18 @@ describe('Task API', () => {
       }
 
       // Mark some as completed
-      await request(app)
+      await request(server)
         .put(`/api/tasks/${tasks[1].id}`)
         .send({ completed: true })
         .expect(200);
 
-      await request(app)
+      await request(server)
         .put(`/api/tasks/${tasks[3].id}`)
         .send({ completed: true })
         .expect(200);
 
       // Check statistics
-      const statsResponse = await request(app)
+      const statsResponse = await request(server)
         .get('/api/tasks/stats')
         .expect(200);
 
@@ -497,13 +513,13 @@ describe('Task API', () => {
       assert.strictEqual(statsResponse.body.data.active, 3);
 
       // Check filtering
-      const activeResponse = await request(app)
+      const activeResponse = await request(server)
         .get('/api/tasks?status=active')
         .expect(200);
 
       assert.strictEqual(activeResponse.body.data.length, 3);
 
-      const completedResponse = await request(app)
+      const completedResponse = await request(server)
         .get('/api/tasks?status=completed')
         .expect(200);
 
@@ -513,7 +529,7 @@ describe('Task API', () => {
 
   describe('Error Handling', () => {
     it('should return 404 for non-API routes that do not exist', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .get('/api/nonexistent')
         .expect(404);
 
