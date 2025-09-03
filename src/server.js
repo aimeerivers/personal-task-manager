@@ -52,14 +52,16 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log('🚀 Personal Task Manager is running!');
-  console.log(`📍 Server: http://localhost:${PORT}`);
-  console.log(`🔌 API: http://localhost:${PORT}/api`);
-  console.log(`📊 Health: http://localhost:${PORT}/api/health`);
-  console.log('');
-  console.log('Press Ctrl+C to stop the server');
-});
+// Only start the server if this file is run directly (not imported for testing)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  app.listen(PORT, () => {
+    console.log('🚀 Personal Task Manager is running!');
+    console.log(`📍 Server: http://localhost:${PORT}`);
+    console.log(`🔌 API: http://localhost:${PORT}/api`);
+    console.log(`📊 Health: http://localhost:${PORT}/api/health`);
+    console.log('');
+    console.log('Press Ctrl+C to stop the server');
+  });
+}
 
 export default app;
