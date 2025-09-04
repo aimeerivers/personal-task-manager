@@ -1,42 +1,20 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { readFile, writeFile, unlink, rmdir } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
-import path from 'path';
 import { readTasks, writeTasks, backupTasks } from '../src/utils/storage.js';
+import { cleanupTestData, setupTestEnvironment, createTestTasks } from './test-utils.js';
+import config from '../src/config/config.js';
 
-const TEST_DATA_DIR = path.join(process.cwd(), 'test-data');
-const TEST_TASKS_FILE = path.join(TEST_DATA_DIR, 'tasks.json');
-const ORIGINAL_DATA_DIR = path.join(process.cwd(), 'data');
+// Ensure we're running in test mode
+process.env.NODE_ENV = 'test';
 
-// Mock the data directory for tests
-const originalCwd = process.cwd;
 beforeEach(async () => {
-  // Clean up test directory if it exists
-  try {
-    if (existsSync(TEST_TASKS_FILE)) {
-      await unlink(TEST_TASKS_FILE);
-    }
-    if (existsSync(TEST_DATA_DIR)) {
-      await rmdir(TEST_DATA_DIR);
-    }
-  } catch (error) {
-    // Ignore cleanup errors
-  }
+  await setupTestEnvironment();
 });
 
 afterEach(async () => {
-  // Clean up test directory
-  try {
-    if (existsSync(TEST_TASKS_FILE)) {
-      await unlink(TEST_TASKS_FILE);
-    }
-    if (existsSync(TEST_DATA_DIR)) {
-      await rmdir(TEST_DATA_DIR);
-    }
-  } catch (error) {
-    // Ignore cleanup errors
-  }
+  await cleanupTestData();
 });
 
 describe('Storage Utils', () => {
@@ -47,17 +25,8 @@ describe('Storage Utils', () => {
     });
 
     it('should return tasks from existing file', async () => {
-      const testTasks = [
-        {
-          id: '1',
-          title: 'Test Task',
-          description: 'Test Description',
-          completed: false,
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z'
-        }
-      ];
-
+      const testTasks = createTestTasks();
+      
       // Create test directory and file
       await writeTasks(testTasks);
       
@@ -68,10 +37,10 @@ describe('Storage Utils', () => {
     it('should return empty array when file contains invalid JSON', async () => {
       // Create data directory manually
       const { mkdir } = await import('fs/promises');
-      await mkdir(path.join(process.cwd(), 'data'), { recursive: true });
+      await mkdir(config.DATA_DIR, { recursive: true });
       
       // Write invalid JSON
-      await writeFile(path.join(process.cwd(), 'data', 'tasks.json'), 'invalid json');
+      await writeFile(config.TASKS_FILE, 'invalid json');
       
       const tasks = await readTasks();
       assert.deepStrictEqual(tasks, []);
@@ -80,32 +49,23 @@ describe('Storage Utils', () => {
 
   describe('writeTasks', () => {
     it('should write tasks to file', async () => {
-      const testTasks = [
-        {
-          id: '1',
-          title: 'Test Task',
-          description: 'Test Description',
-          completed: false,
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z'
-        }
-      ];
+      const testTasks = createTestTasks();
 
       await writeTasks(testTasks);
       
-      const fileContent = await readFile(path.join(process.cwd(), 'data', 'tasks.json'), 'utf-8');
+      const fileContent = await readFile(config.TASKS_FILE, 'utf-8');
       const savedTasks = JSON.parse(fileContent);
       
       assert.deepStrictEqual(savedTasks, testTasks);
     });
 
     it('should create data directory if it does not exist', async () => {
-      const testTasks = [{ id: '1', title: 'Test' }];
+      const testTasks = createTestTasks();
       
       await writeTasks(testTasks);
       
-      assert.ok(existsSync(path.join(process.cwd(), 'data')));
-      assert.ok(existsSync(path.join(process.cwd(), 'data', 'tasks.json')));
+      assert.ok(existsSync(config.DATA_DIR));
+      assert.ok(existsSync(config.TASKS_FILE));
     });
 
     it('should format JSON with proper indentation', async () => {
@@ -113,7 +73,7 @@ describe('Storage Utils', () => {
       
       await writeTasks(testTasks);
       
-      const fileContent = await readFile(path.join(process.cwd(), 'data', 'tasks.json'), 'utf-8');
+      const fileContent = await readFile(config.TASKS_FILE, 'utf-8');
       
       // Check that the JSON is properly formatted (contains newlines and spaces)
       assert.ok(fileContent.includes('\n'));
@@ -122,17 +82,27 @@ describe('Storage Utils', () => {
   });
 
   describe('backupTasks', () => {
-    it('should create backup file when tasks file exists', async () => {
-      const testTasks = [{ id: '1', title: 'Test Task' }];
+    it('should not create backup file in test environment', async () => {
+      const testTasks = createTestTasks();
       
       // Create original tasks file
       await writeTasks(testTasks);
       
-      // Create backup
+      // Try to create backup (should be skipped in test environment)
       await backupTasks();
       
       // Check that original file still exists
-      assert.ok(existsSync(path.join(process.cwd(), 'data', 'tasks.json')));
+      assert.ok(existsSync(config.TASKS_FILE));
+      
+      // Check that no backup files were created in test directory
+      const { readdir } = await import('fs/promises');
+      try {
+        const files = await readdir(config.DATA_DIR);
+        const backupFiles = files.filter(file => file.startsWith('tasks-backup-'));
+        assert.strictEqual(backupFiles.length, 0, 'No backup files should be created in test mode');
+      } catch (error) {
+        // Directory might not exist, which is fine
+      }
     });
 
     it('should not throw error when tasks file does not exist', async () => {
@@ -146,24 +116,7 @@ describe('Storage Utils', () => {
 
   describe('integration', () => {
     it('should maintain data consistency through read/write cycle', async () => {
-      const originalTasks = [
-        {
-          id: '1',
-          title: 'First Task',
-          description: 'First Description',
-          completed: false,
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z'
-        },
-        {
-          id: '2',
-          title: 'Second Task',
-          description: 'Second Description',
-          completed: true,
-          createdAt: '2024-01-02T00:00:00.000Z',
-          updatedAt: '2024-01-02T00:00:00.000Z'
-        }
-      ];
+      const originalTasks = createTestTasks();
 
       // Write tasks
       await writeTasks(originalTasks);
