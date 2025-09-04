@@ -1,9 +1,10 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import config from '../config/config.js';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
+const DATA_DIR = config.DATA_DIR;
+const TASKS_FILE = config.TASKS_FILE;
 
 /**
  * Ensures the data directory exists
@@ -53,6 +54,11 @@ export async function writeTasks(tasks) {
  * Backs up the current tasks file
  */
 export async function backupTasks() {
+  // Skip backup in test environment
+  if (!config.BACKUP_ENABLED) {
+    return;
+  }
+  
   try {
     if (existsSync(TASKS_FILE)) {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

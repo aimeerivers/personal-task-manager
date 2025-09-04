@@ -1,13 +1,11 @@
 import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
-import { unlink, rmdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
 import app from '../src/server.js';
+import { cleanupTestData, setupTestEnvironment, createTestTasks } from './test-utils.js';
 
-const TEST_DATA_DIR = path.join(process.cwd(), 'data');
-const TEST_TASKS_FILE = path.join(TEST_DATA_DIR, 'tasks.json');
+// Ensure we're running in test mode
+process.env.NODE_ENV = 'test';
 
 let server;
 
@@ -27,25 +25,12 @@ after(async () => {
 
 // Clean up test data before and after each test
 beforeEach(async () => {
-  await cleanupTestData();
+  await setupTestEnvironment();
 });
 
 afterEach(async () => {
   await cleanupTestData();
 });
-
-async function cleanupTestData() {
-  try {
-    if (existsSync(TEST_TASKS_FILE)) {
-      await unlink(TEST_TASKS_FILE);
-    }
-    if (existsSync(TEST_DATA_DIR)) {
-      await rmdir(TEST_DATA_DIR);
-    }
-  } catch (error) {
-    // Ignore cleanup errors
-  }
-}
 
 describe('Task API', () => {
   describe('GET /api/health', () => {
