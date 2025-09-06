@@ -6,6 +6,8 @@ class TaskManager {
   constructor() {
     this.tasks = [];
     this.currentFilter = 'all';
+    this.currentPriorityFilter = 'all';
+    this.currentCategoryFilter = 'all';
     this.editingTaskId = null;
     
     this.init();
@@ -18,6 +20,7 @@ class TaskManager {
     this.bindEvents();
     this.loadTasks();
     this.loadStats();
+    this.loadCategories();
   }
 
   /**
@@ -74,10 +77,25 @@ class TaskManager {
     try {
       this.showLoading(true);
       
-      const response = await this.apiRequest('GET', `/api/tasks?status=${this.currentFilter}`);
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (this.currentFilter && this.currentFilter !== 'all') {
+        params.append('status', this.currentFilter);
+      }
+      if (this.currentPriorityFilter && this.currentPriorityFilter !== 'all') {
+        params.append('priority', this.currentPriorityFilter);
+      }
+      if (this.currentCategoryFilter && this.currentCategoryFilter !== 'all') {
+        params.append('category', this.currentCategoryFilter);
+      }
+      
+      const queryString = params.toString();
+      const url = `/api/tasks${queryString ? '?' + queryString : ''}`;
+      
+      const response = await this.apiRequest('GET', url);
       
       if (response.success) {
-        this.tasks = response.data;
+        this.tasks = this.applyClientSideFilters(response.data);
         this.renderTasks();
       } else {
         this.showToast('Failed to load tasks', 'error');
@@ -88,6 +106,36 @@ class TaskManager {
     } finally {
       this.showLoading(false);
     }
+  }
+
+  /**
+   * Apply client-side filters for special status filters
+   */
+  applyClientSideFilters(tasks) {
+    if (this.currentFilter === 'overdue') {
+      const now = new Date();
+      return tasks.filter(task => 
+        !task.completed && 
+        task.dueDate && 
+        new Date(task.dueDate) < now
+      );
+    }
+    
+    if (this.currentFilter === 'due-today') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      return tasks.filter(task => 
+        !task.completed && 
+        task.dueDate && 
+        new Date(task.dueDate) >= today && 
+        new Date(task.dueDate) < tomorrow
+      );
+    }
+    
+    return tasks;
   }
 
   /**
@@ -115,6 +163,63 @@ class TaskManager {
   }
 
   /**
+   * Load and populate category filters and inputs
+   */
+  async loadCategories() {
+    try {
+      const response = await this.apiRequest('GET', '/api/tasks/categories');
+      
+      if (response.success) {
+        this.updateCategoryFilters(response.data);
+        this.updateCategoryInputs(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  }
+
+  /**
+   * Update category filter buttons
+   */
+  updateCategoryFilters(categories) {
+    const categoryFilters = document.getElementById('categoryFilters');
+    const allButton = categoryFilters.querySelector('[data-filter="all"]');
+    
+    // Remove existing category buttons
+    categoryFilters.querySelectorAll('[data-filter]:not([data-filter="all"])').forEach(btn => {
+      btn.remove();
+    });
+    
+    // Add category buttons
+    categories.forEach(category => {
+      const button = document.createElement('button');
+      button.className = 'filter-btn';
+      button.dataset.filter = category;
+      button.dataset.type = 'category';
+      button.textContent = `🏷️ ${category}`;
+      button.addEventListener('click', (e) => this.handleFilterChange(e));
+      categoryFilters.appendChild(button);
+    });
+  }
+
+  /**
+   * Update category input datalists
+   */
+  updateCategoryInputs(categories) {
+    const categoryList = document.getElementById('categoryList');
+    const editCategoryList = document.getElementById('editCategoryList');
+    
+    [categoryList, editCategoryList].forEach(list => {
+      list.innerHTML = '';
+      categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        list.appendChild(option);
+      });
+    });
+  }
+
+  /**
    * Handle add task form submission
    */
   async handleAddTask(e) {
@@ -122,9 +227,15 @@ class TaskManager {
     
     const titleInput = document.getElementById('taskTitle');
     const descriptionInput = document.getElementById('taskDescription');
+    const priorityInput = document.getElementById('taskPriority');
+    const categoryInput = document.getElementById('taskCategory');
+    const dueDateInput = document.getElementById('taskDueDate');
     
     const title = titleInput.value.trim();
     const description = descriptionInput.value.trim();
+    const priority = priorityInput.value;
+    const category = categoryInput.value.trim() || 'general';
+    const dueDate = dueDateInput.value || null;
     
     if (!title) {
       this.showToast('Please enter a task title', 'error');
@@ -133,21 +244,33 @@ class TaskManager {
     }
 
     try {
-      const response = await this.apiRequest('POST', '/api/tasks', {
+      const taskData = {
         title,
-        description
-      });
+        description,
+        priority,
+        category,
+        dueDate
+      };
+
+      const response = await this.apiRequest('POST', '/api/tasks', taskData);
       
       if (response.success) {
         this.showToast('Task created successfully! 🎉', 'success');
+        
+        // Reset form
         titleInput.value = '';
         descriptionInput.value = '';
+        priorityInput.value = 'medium';
+        categoryInput.value = '';
+        dueDateInput.value = '';
         titleInput.focus();
         
         // Reload tasks and stats
-        await Promise.all([this.loadTasks(), this.loadStats()]);
+        await this.loadTasks();
+        await this.loadStats();
+        await this.loadCategories();
       } else {
-        this.showToast(response.error || 'Failed to create task', 'error');
+        this.showToast(response.message || 'Failed to create task', 'error');
       }
     } catch (error) {
       console.error('Error creating task:', error);
@@ -159,11 +282,24 @@ class TaskManager {
    * Handle filter change
    */
   handleFilterChange(e) {
-    const filterButtons = document.querySelectorAll('.filter-btn');
-    filterButtons.forEach(btn => btn.classList.remove('active'));
+    const filterType = e.target.dataset.type;
+    const filterValue = e.target.dataset.filter;
+    
+    // Remove active class from siblings in the same filter group
+    const siblings = e.target.parentElement.querySelectorAll('.filter-btn');
+    siblings.forEach(btn => btn.classList.remove('active'));
     
     e.target.classList.add('active');
-    this.currentFilter = e.target.dataset.filter;
+    
+    // Update the appropriate filter
+    if (filterType === 'status') {
+      this.currentFilter = filterValue;
+    } else if (filterType === 'priority') {
+      this.currentPriorityFilter = filterValue;
+    } else if (filterType === 'category') {
+      this.currentCategoryFilter = filterValue;
+    }
+    
     this.loadTasks();
   }
 
@@ -201,6 +337,10 @@ class TaskManager {
     
     document.getElementById('editTaskTitle').value = task.title;
     document.getElementById('editTaskDescription').value = task.description || '';
+    document.getElementById('editTaskPriority').value = task.priority || 'medium';
+    document.getElementById('editTaskCategory').value = task.category || '';
+    document.getElementById('editTaskDueDate').value = task.dueDate ? 
+      new Date(task.dueDate).toISOString().slice(0, 16) : '';
     document.getElementById('editTaskCompleted').checked = task.completed;
     
     const modal = document.getElementById('editModal');
@@ -233,6 +373,9 @@ class TaskManager {
     
     const title = document.getElementById('editTaskTitle').value.trim();
     const description = document.getElementById('editTaskDescription').value.trim();
+    const priority = document.getElementById('editTaskPriority').value;
+    const category = document.getElementById('editTaskCategory').value.trim() || 'general';
+    const dueDate = document.getElementById('editTaskDueDate').value || null;
     const completed = document.getElementById('editTaskCompleted').checked;
     
     if (!title) {
@@ -241,18 +384,23 @@ class TaskManager {
     }
 
     try {
-      const response = await this.apiRequest('PUT', `/api/tasks/${this.editingTaskId}`, {
+      const taskData = {
         title,
         description,
+        priority,
+        category,
+        dueDate,
         completed
-      });
+      };
+
+      const response = await this.apiRequest('PUT', `/api/tasks/${this.editingTaskId}`, taskData);
       
       if (response.success) {
         this.showToast('Task updated successfully! ✨', 'success');
         this.closeEditModal();
         
         // Reload tasks and stats
-        await Promise.all([this.loadTasks(), this.loadStats()]);
+        await Promise.all([this.loadTasks(), this.loadStats(), this.loadCategories()]);
       } else {
         this.showToast(response.error || 'Failed to update task', 'error');
       }
@@ -316,8 +464,46 @@ class TaskManager {
     const updatedDate = new Date(task.updatedAt).toLocaleDateString();
     const isUpdated = task.createdAt !== task.updatedAt;
     
+    // Priority class and icon
+    const priorityClass = `priority-${task.priority || 'medium'}`;
+    const priorityIcon = {
+      high: '🔴',
+      medium: '🟡',
+      low: '🟢'
+    }[task.priority || 'medium'];
+    
+    // Due date formatting and status
+    let dueDateHtml = '';
+    let dueDateClass = '';
+    if (task.dueDate) {
+      const dueDate = new Date(task.dueDate);
+      const now = new Date();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      if (!task.completed && dueDate < now) {
+        dueDateClass = 'overdue';
+      } else if (!task.completed && dueDate >= today && dueDate < tomorrow) {
+        dueDateClass = 'due-today';
+      }
+      
+      const dueDateStr = dueDate.toLocaleDateString();
+      const dueTimeStr = dueDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      dueDateHtml = `<div class="due-date ${dueDateClass}">📅 Due: ${dueDateStr} ${dueTimeStr}</div>`;
+    }
+    
+    // Task item classes
+    const taskClasses = [
+      'task-item',
+      task.completed ? 'completed' : '',
+      priorityClass,
+      dueDateClass
+    ].filter(Boolean).join(' ');
+    
     return `
-      <div class="task-item ${task.completed ? 'completed' : ''}" data-task-id="${task.id}">
+      <div class="${taskClasses}" data-task-id="${task.id}">
         <div class="task-header">
           <div class="task-checkbox">
             <input 
@@ -331,9 +517,19 @@ class TaskManager {
             <h3 class="task-title">${this.escapeHtml(task.title)}</h3>
             ${task.description ? `<p class="task-description">${this.escapeHtml(task.description)}</p>` : ''}
             <div class="task-meta">
-              <div class="task-date">
-                Created: ${createdDate}
-                ${isUpdated ? ` • Updated: ${updatedDate}` : ''}
+              <div class="task-info">
+                <div class="task-badges">
+                  <span class="priority-badge ${task.priority || 'medium'}">
+                    ${priorityIcon} ${(task.priority || 'medium').toUpperCase()}
+                  </span>
+                  ${task.category && task.category !== 'general' ? 
+                    `<span class="category-tag">🏷️ ${this.escapeHtml(task.category)}</span>` : ''}
+                </div>
+                ${dueDateHtml}
+                <div class="task-date">
+                  Created: ${createdDate}
+                  ${isUpdated ? ` • Updated: ${updatedDate}` : ''}
+                </div>
               </div>
               <div class="task-actions">
                 <button class="task-action-btn edit-btn" data-task-id="${task.id}">

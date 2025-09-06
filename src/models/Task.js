@@ -10,6 +10,9 @@ export class Task {
     this.title = data.title || '';
     this.description = data.description || '';
     this.completed = Boolean(data.completed);
+    this.priority = data.priority || 'medium'; // 'high', 'medium', 'low'
+    this.category = data.category || 'general'; // User-defined categories
+    this.dueDate = data.dueDate || null; // ISO string or null
     this.createdAt = data.createdAt || new Date().toISOString();
     this.updatedAt = data.updatedAt || new Date().toISOString();
   }
@@ -20,6 +23,7 @@ export class Task {
    */
   validate() {
     const errors = [];
+    const validPriorities = ['high', 'medium', 'low'];
 
     if (!this.title || this.title.trim().length === 0) {
       errors.push('Title is required');
@@ -31,6 +35,21 @@ export class Task {
 
     if (this.description && this.description.length > 1000) {
       errors.push('Description must be less than 1000 characters');
+    }
+
+    if (this.priority && !validPriorities.includes(this.priority)) {
+      errors.push('Priority must be high, medium, or low');
+    }
+
+    if (this.category && this.category.length > 50) {
+      errors.push('Category must be less than 50 characters');
+    }
+
+    if (this.dueDate) {
+      const dueDate = new Date(this.dueDate);
+      if (isNaN(dueDate.getTime())) {
+        errors.push('Due date must be a valid date');
+      }
     }
 
     return {
@@ -55,6 +74,9 @@ export class Task {
       title: (this.title || '').trim(),
       description: (this.description || '').trim(),
       completed: this.completed,
+      priority: this.priority || 'medium',
+      category: this.category || 'general',
+      dueDate: this.dueDate,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
     };
@@ -165,6 +187,101 @@ export class Task {
   static async findByStatus(completed) {
     const tasks = await Task.findAll();
     return tasks.filter(task => task.completed === completed);
+  }
+
+  /**
+   * Gets tasks filtered by priority
+   * @param {string} priority - Priority level (high, medium, low)
+   * @returns {Promise<Array>} Filtered tasks
+   */
+  static async findByPriority(priority) {
+    const tasks = await Task.findAll();
+    return tasks.filter(task => task.priority === priority);
+  }
+
+  /**
+   * Gets tasks filtered by category
+   * @param {string} category - Category name
+   * @returns {Promise<Array>} Filtered tasks
+   */
+  static async findByCategory(category) {
+    const tasks = await Task.findAll();
+    return tasks.filter(task => task.category === category);
+  }
+
+  /**
+   * Gets all unique categories from existing tasks
+   * @returns {Promise<Array>} Array of unique categories
+   */
+  static async getCategories() {
+    const tasks = await Task.findAll();
+    const categories = [...new Set(tasks.map(task => task.category))];
+    return categories.filter(cat => cat && cat.trim().length > 0);
+  }
+
+  /**
+   * Gets overdue tasks
+   * @returns {Promise<Array>} Overdue tasks
+   */
+  static async getOverdue() {
+    const tasks = await Task.findAll();
+    const now = new Date();
+    return tasks.filter(task => 
+      !task.completed && 
+      task.dueDate && 
+      new Date(task.dueDate) < now
+    );
+  }
+
+  /**
+   * Gets tasks due today
+   * @returns {Promise<Array>} Tasks due today
+   */
+  static async getDueToday() {
+    const tasks = await Task.findAll();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    return tasks.filter(task => 
+      !task.completed && 
+      task.dueDate && 
+      new Date(task.dueDate) >= today && 
+      new Date(task.dueDate) < tomorrow
+    );
+  }
+
+  /**
+   * Checks if task is overdue
+   * @returns {boolean} True if task is overdue
+   */
+  isOverdue() {
+    if (!this.dueDate || this.completed) return false;
+    return new Date(this.dueDate) < new Date();
+  }
+
+  /**
+   * Checks if task is due today
+   * @returns {boolean} True if task is due today
+   */
+  isDueToday() {
+    if (!this.dueDate || this.completed) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dueDate = new Date(this.dueDate);
+    return dueDate >= today && dueDate < tomorrow;
+  }
+
+  /**
+   * Gets priority weight for sorting (higher number = higher priority)
+   * @returns {number} Priority weight
+   */
+  getPriorityWeight() {
+    const weights = { high: 3, medium: 2, low: 1 };
+    return weights[this.priority] || 2;
   }
 
   /**

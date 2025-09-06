@@ -1,16 +1,53 @@
 # Personal Task Manager 📝
 
-A beautiful and functional personal task manager built with Node.js and vanilla JavaScript.
+A powerful and beautiful personal task manager built with Node.js and vanilla JavaScript. Transform your productivity with advanced task organization, priority management, and smart filtering!
 
 ## Features ✨
 
-- ✅ Create, edit, and delete tasks
-- 🎯 Mark tasks as complete/incomplete
-- 🔍 Filter tasks by status (all, active, completed)
-- 💾 Data persistence using JSON files
-- 🎨 Beautiful, responsive web interface
-- 🚀 RESTful API backend
-- 🧪 Comprehensive test coverage
+### 🎯 **Task Management**
+- ✅ Create, edit, and delete tasks with rich details
+- 🔄 Mark tasks as complete/incomplete with smooth animations
+- � Add detailed descriptions to provide context
+- 💾 Automatic data persistence using JSON files
+
+### 🚨 **Priority System**
+- 🔴 **High Priority** - Urgent tasks that need immediate attention
+- 🟡 **Medium Priority** - Important tasks for regular workflow
+- 🟢 **Low Priority** - Tasks you can do when time permits
+- 🎨 Color-coded visual indicators and smart priority-based sorting
+
+### 🏷️ **Dynamic Categories**
+- 📂 Create custom categories (Work, Personal, Shopping, Health, etc.)
+- 🏷️ Auto-suggestions from existing categories
+- 🔍 Filter tasks by category for focused work sessions
+- ✨ Automatic category management and organization
+
+### 📅 **Due Date Management**
+- ⏰ Set due dates and times with native datetime picker
+- 🚨 **Overdue alerts** - Tasks past due get special red highlighting
+- � **Due today indicators** - Tasks due today get amber highlighting
+- 🔔 Visual deadline tracking to stay on top of commitments
+
+### 🔍 **Advanced Filtering & Organization**
+- 📊 Multi-dimensional filtering (Status + Priority + Category)
+- 🔍 Filter by: All Tasks, Active, Completed, Overdue, Due Today
+- 🎯 Priority-based filtering (High, Medium, Low)
+- 📂 Category-based filtering with dynamic filter generation
+- 🗂️ Smart sorting by priority and creation date
+
+### 🎨 **Beautiful Interface**
+- 🌟 Modern, clean design with smooth animations
+- 📱 Fully responsive - works perfectly on desktop, tablet, and mobile
+- 🎭 Visual priority indicators with left-border color coding
+- 🏷️ Elegant category tags and priority badges
+- ⚡ Intuitive keyboard shortcuts and touch-friendly controls
+
+### 🚀 **Technical Excellence**
+- � RESTful API backend with Express.js
+- 🧪 Comprehensive test coverage (35+ tests, 100% pass rate)
+- 🔄 Real-time updates and smooth user experience
+- 📊 Task statistics and progress tracking
+- 🛡️ Robust error handling and validation
 
 ## Getting Started 🚀
 

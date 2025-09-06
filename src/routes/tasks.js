@@ -7,12 +7,15 @@ const router = express.Router();
  * Get all tasks with optional filtering
  * Query params:
  * - status: 'active', 'completed', or 'all' (default: 'all')
+ * - priority: 'high', 'medium', 'low', or 'all' (default: 'all')
+ * - category: category name or 'all' (default: 'all')
  */
 router.get('/', async (req, res) => {
   try {
-    const { status = 'all' } = req.query;
+    const { status = 'all', priority = 'all', category = 'all' } = req.query;
     let tasks;
 
+    // Start with all tasks or filter by completion status
     switch (status) {
       case 'active':
         tasks = await Task.findByStatus(false);
@@ -24,8 +27,30 @@ router.get('/', async (req, res) => {
         tasks = await Task.findAll();
     }
 
-    // Sort tasks by creation date (newest first)
-    tasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Apply priority filter
+    if (priority !== 'all') {
+      tasks = tasks.filter(task => task.priority === priority);
+    }
+
+    // Apply category filter
+    if (category !== 'all') {
+      tasks = tasks.filter(task => task.category === category);
+    }
+
+    // Sort tasks by priority first, then creation date
+    tasks.sort((a, b) => {
+      // Priority sorting (high > medium > low)
+      const priorityOrder = { high: 3, medium: 2, low: 1 };
+      const aPriority = priorityOrder[a.priority] || 2;
+      const bPriority = priorityOrder[b.priority] || 2;
+      
+      if (aPriority !== bPriority) {
+        return bPriority - aPriority;
+      }
+      
+      // If same priority, sort by creation date (newest first)
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
 
     res.json({
       success: true,
@@ -55,6 +80,25 @@ router.get('/stats', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch task statistics'
+    });
+  }
+});
+
+/**
+ * Get all unique categories
+ */
+router.get('/categories', async (req, res) => {
+  try {
+    const categories = await Task.getCategories();
+    res.json({
+      success: true,
+      data: categories
+    });
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch categories'
     });
   }
 });
@@ -91,11 +135,14 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, priority, category, dueDate } = req.body;
     
     const task = await Task.create({
       title,
-      description
+      description,
+      priority: priority || 'medium',
+      category: category || 'general',
+      dueDate
     });
 
     res.status(201).json({
@@ -126,13 +173,16 @@ router.post('/', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
   try {
-    const { title, description, completed } = req.body;
+    const { title, description, completed, priority, category, dueDate } = req.body;
     
     // Only include defined values in updateData
     const updateData = {};
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
     if (completed !== undefined) updateData.completed = completed;
+    if (priority !== undefined) updateData.priority = priority;
+    if (category !== undefined) updateData.category = category;
+    if (dueDate !== undefined) updateData.dueDate = dueDate;
     
     const task = await Task.update(req.params.id, updateData);
 
