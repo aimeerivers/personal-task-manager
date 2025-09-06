@@ -148,6 +148,15 @@ export class Task {
     if (updateData.completed !== undefined) {
       task.completed = updateData.completed;
     }
+    if (updateData.priority !== undefined) {
+      task.priority = updateData.priority;
+    }
+    if (updateData.category !== undefined) {
+      task.category = updateData.category;
+    }
+    if (updateData.dueDate !== undefined) {
+      task.dueDate = updateData.dueDate;
+    }
     task.touch();
 
     const validation = task.validate();

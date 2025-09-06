@@ -309,6 +309,254 @@ describe('Task API', () => {
       assert.strictEqual(response.body.data.title, 'Trimmed Title');
       assert.strictEqual(response.body.data.description, 'Trimmed Description');
     });
+
+    // New feature tests for priority, category, and due date
+    it('should create a task with priority', async () => {
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'High Priority Task',
+          priority: 'high'
+        })
+        .expect(201);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.title, 'High Priority Task');
+      assert.strictEqual(response.body.data.priority, 'high');
+    });
+
+    it('should create a task with category', async () => {
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Work Task',
+          category: 'Work'
+        })
+        .expect(201);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.title, 'Work Task');
+      assert.strictEqual(response.body.data.category, 'Work');
+    });
+
+    it('should create a task with due date', async () => {
+      const dueDate = '2025-09-10T14:00:00.000Z';
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Scheduled Task',
+          dueDate: dueDate
+        })
+        .expect(201);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.title, 'Scheduled Task');
+      assert.strictEqual(response.body.data.dueDate, dueDate);
+    });
+
+    it('should create a task with all new fields', async () => {
+      const dueDate = '2025-09-10T14:00:00.000Z';
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Complete Task',
+          description: 'Task with all fields',
+          priority: 'high',
+          category: 'Work',
+          dueDate: dueDate
+        })
+        .expect(201);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.title, 'Complete Task');
+      assert.strictEqual(response.body.data.description, 'Task with all fields');
+      assert.strictEqual(response.body.data.priority, 'high');
+      assert.strictEqual(response.body.data.category, 'Work');
+      assert.strictEqual(response.body.data.dueDate, dueDate);
+    });
+
+    it('should default to medium priority if not specified', async () => {
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Default Priority Task'
+        })
+        .expect(201);
+
+      assert.strictEqual(response.body.data.priority, 'medium');
+    });
+
+    it('should default to general category if not specified', async () => {
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Default Category Task'
+        })
+        .expect(201);
+
+      assert.strictEqual(response.body.data.category, 'general');
+    });
+
+    it('should validate priority values', async () => {
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Invalid Priority Task',
+          priority: 'invalid'
+        })
+        .expect(400);
+
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Validation failed');
+    });
+
+    it('should validate due date format', async () => {
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Invalid Date Task',
+          dueDate: 'invalid-date'
+        })
+        .expect(400);
+
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Validation failed');
+    });
+
+    it('should validate category length', async () => {
+      const longCategory = 'a'.repeat(51);
+      const response = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Long Category Task',
+          category: longCategory
+        })
+        .expect(400);
+
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Validation failed');
+    });
+  });
+
+  // New filtering tests
+  describe('GET /api/tasks - Advanced Filtering', () => {
+    beforeEach(async () => {
+      // Create test tasks with different priorities, categories, and due dates
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'High Priority Work Task',
+          priority: 'high',
+          category: 'Work',
+          dueDate: '2025-09-10T14:00:00.000Z'
+        });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Medium Priority Personal Task',
+          priority: 'medium',
+          category: 'Personal',
+          dueDate: '2025-09-12T10:00:00.000Z'
+        });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Low Priority General Task',
+          priority: 'low',
+          category: 'general'
+        });
+    });
+
+    it('should filter tasks by priority', async () => {
+      const response = await request(server)
+        .get('/api/tasks?priority=high')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].title, 'High Priority Work Task');
+      assert.strictEqual(response.body.data[0].priority, 'high');
+    });
+
+    it('should filter tasks by category', async () => {
+      const response = await request(server)
+        .get('/api/tasks?category=Work')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].title, 'High Priority Work Task');
+      assert.strictEqual(response.body.data[0].category, 'Work');
+    });
+
+    it('should filter tasks by multiple criteria', async () => {
+      const response = await request(server)
+        .get('/api/tasks?priority=medium&category=Personal')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].title, 'Medium Priority Personal Task');
+      assert.strictEqual(response.body.data[0].priority, 'medium');
+      assert.strictEqual(response.body.data[0].category, 'Personal');
+    });
+
+    it('should sort tasks by priority then creation date', async () => {
+      const response = await request(server)
+        .get('/api/tasks')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 3);
+      
+      // Should be sorted: high priority first, then medium, then low
+      assert.strictEqual(response.body.data[0].priority, 'high');
+      assert.strictEqual(response.body.data[1].priority, 'medium');
+      assert.strictEqual(response.body.data[2].priority, 'low');
+    });
+  });
+
+  // Categories endpoint tests
+  describe('GET /api/tasks/categories', () => {
+    it('should return empty array when no tasks exist', async () => {
+      const response = await request(server)
+        .get('/api/tasks/categories')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.deepStrictEqual(response.body.data, []);
+    });
+
+    it('should return unique categories', async () => {
+      // Create tasks with different categories
+      await request(server)
+        .post('/api/tasks')
+        .send({ title: 'Work Task 1', category: 'Work' });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({ title: 'Work Task 2', category: 'Work' });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({ title: 'Personal Task', category: 'Personal' });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({ title: 'General Task', category: 'general' });
+
+      const response = await request(server)
+        .get('/api/tasks/categories')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 3);
+      assert.ok(response.body.data.includes('Work'));
+      assert.ok(response.body.data.includes('Personal'));
+      assert.ok(response.body.data.includes('general'));
+    });
   });
 
   describe('PUT /api/tasks/:id', () => {
@@ -388,6 +636,135 @@ describe('Task API', () => {
       assert.strictEqual(response.body.data.title, 'Original Title');
       assert.strictEqual(response.body.data.description, 'Original Description');
       assert.strictEqual(response.body.data.completed, true);
+    });
+
+    // New field update tests
+    it('should update task priority', async () => {
+      const createResponse = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Priority Update Task',
+          priority: 'low'
+        })
+        .expect(201);
+
+      const response = await request(server)
+        .put(`/api/tasks/${createResponse.body.data.id}`)
+        .send({ priority: 'high' })
+        .expect(200);
+
+      assert.strictEqual(response.body.data.priority, 'high');
+      assert.strictEqual(response.body.data.title, 'Priority Update Task'); // Other fields unchanged
+    });
+
+    it('should update task category', async () => {
+      const createResponse = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Category Update Task',
+          category: 'Personal'
+        })
+        .expect(201);
+
+      const response = await request(server)
+        .put(`/api/tasks/${createResponse.body.data.id}`)
+        .send({ category: 'Work' })
+        .expect(200);
+
+      assert.strictEqual(response.body.data.category, 'Work');
+      assert.strictEqual(response.body.data.title, 'Category Update Task');
+    });
+
+    it('should update task due date', async () => {
+      const createResponse = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Due Date Update Task'
+        })
+        .expect(201);
+
+      const newDueDate = '2025-09-15T16:00:00.000Z';
+      const response = await request(server)
+        .put(`/api/tasks/${createResponse.body.data.id}`)
+        .send({ dueDate: newDueDate })
+        .expect(200);
+
+      assert.strictEqual(response.body.data.dueDate, newDueDate);
+      assert.strictEqual(response.body.data.title, 'Due Date Update Task');
+    });
+
+    it('should update multiple new fields at once', async () => {
+      const createResponse = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Multi Update Task',
+          priority: 'low',
+          category: 'Personal'
+        })
+        .expect(201);
+
+      const newDueDate = '2025-09-20T10:00:00.000Z';
+      const response = await request(server)
+        .put(`/api/tasks/${createResponse.body.data.id}`)
+        .send({
+          priority: 'high',
+          category: 'Work',
+          dueDate: newDueDate,
+          title: 'Updated Multi Task'
+        })
+        .expect(200);
+
+      assert.strictEqual(response.body.data.title, 'Updated Multi Task');
+      assert.strictEqual(response.body.data.priority, 'high');
+      assert.strictEqual(response.body.data.category, 'Work');
+      assert.strictEqual(response.body.data.dueDate, newDueDate);
+    });
+
+    it('should validate priority on update', async () => {
+      const createResponse = await request(server)
+        .post('/api/tasks')
+        .send({ title: 'Valid Task' })
+        .expect(201);
+
+      const response = await request(server)
+        .put(`/api/tasks/${createResponse.body.data.id}`)
+        .send({ priority: 'invalid' })
+        .expect(400);
+
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Validation failed');
+    });
+
+    it('should validate due date on update', async () => {
+      const createResponse = await request(server)
+        .post('/api/tasks')
+        .send({ title: 'Valid Task' })
+        .expect(201);
+
+      const response = await request(server)
+        .put(`/api/tasks/${createResponse.body.data.id}`)
+        .send({ dueDate: 'invalid-date' })
+        .expect(400);
+
+      assert.strictEqual(response.body.success, false);
+      assert.strictEqual(response.body.error, 'Validation failed');
+    });
+
+    it('should remove due date when set to null', async () => {
+      const createResponse = await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Task with Due Date',
+          dueDate: '2025-09-15T16:00:00.000Z'
+        })
+        .expect(201);
+
+      const response = await request(server)
+        .put(`/api/tasks/${createResponse.body.data.id}`)
+        .send({ dueDate: null })
+        .expect(200);
+
+      assert.strictEqual(response.body.data.dueDate, null);
     });
   });
 
