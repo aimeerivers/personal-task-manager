@@ -9,10 +9,11 @@ const router = express.Router();
  * - status: 'active', 'completed', or 'all' (default: 'all')
  * - priority: 'high', 'medium', 'low', or 'all' (default: 'all')
  * - category: category name or 'all' (default: 'all')
+ * - search: search query for title, description, or category
  */
 router.get('/', async (req, res) => {
   try {
-    const { status = 'all', priority = 'all', category = 'all' } = req.query;
+    const { status = 'all', priority = 'all', category = 'all', search } = req.query;
     let tasks;
 
     // Start with all tasks or filter by completion status
@@ -25,6 +26,18 @@ router.get('/', async (req, res) => {
         break;
       default:
         tasks = await Task.findAll();
+    }
+
+    // Apply search filter first if provided
+    if (search && search.trim()) {
+      const searchQuery = search.toLowerCase().trim();
+      tasks = tasks.filter(task => {
+        const titleMatch = task.title.toLowerCase().includes(searchQuery);
+        const descriptionMatch = task.description && task.description.toLowerCase().includes(searchQuery);
+        const categoryMatch = task.category && task.category.toLowerCase().includes(searchQuery);
+        
+        return titleMatch || descriptionMatch || categoryMatch;
+      });
     }
 
     // Apply priority filter

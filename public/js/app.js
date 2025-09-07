@@ -8,6 +8,7 @@ class TaskManager {
     this.currentFilter = 'all';
     this.currentPriorityFilter = 'all';
     this.currentCategoryFilter = 'all';
+    this.searchQuery = '';
     this.editingTaskId = null;
     
     this.init();
@@ -36,6 +37,18 @@ class TaskManager {
     filterButtons.forEach(btn => {
       btn.addEventListener('click', (e) => this.handleFilterChange(e));
     });
+
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    const clearSearch = document.getElementById('clearSearch');
+    
+    searchInput.addEventListener('input', (e) => this.handleSearch(e));
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.clearSearch();
+      }
+    });
+    clearSearch.addEventListener('click', () => this.clearSearch());
 
     // Edit modal
     const editModal = document.getElementById('editModal');
@@ -88,6 +101,9 @@ class TaskManager {
       if (this.currentCategoryFilter && this.currentCategoryFilter !== 'all') {
         params.append('category', this.currentCategoryFilter);
       }
+      if (this.searchQuery && this.searchQuery.trim()) {
+        params.append('search', this.searchQuery.trim());
+      }
       
       const queryString = params.toString();
       const url = `/api/tasks${queryString ? '?' + queryString : ''}`;
@@ -112,22 +128,23 @@ class TaskManager {
    * Apply client-side filters for special status filters
    */
   applyClientSideFilters(tasks) {
+    let filteredTasks = [...tasks];
+    
+    // Apply special status filters that aren't handled by the backend
     if (this.currentFilter === 'overdue') {
       const now = new Date();
-      return tasks.filter(task => 
+      filteredTasks = filteredTasks.filter(task => 
         !task.completed && 
         task.dueDate && 
         new Date(task.dueDate) < now
       );
-    }
-    
-    if (this.currentFilter === 'due-today') {
+    } else if (this.currentFilter === 'due-today') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      return tasks.filter(task => 
+      filteredTasks = filteredTasks.filter(task => 
         !task.completed && 
         task.dueDate && 
         new Date(task.dueDate) >= today && 
@@ -135,7 +152,85 @@ class TaskManager {
       );
     }
     
-    return tasks;
+    return filteredTasks;
+  }
+
+  /**
+   * Apply search filter to tasks
+   */
+  applySearchFilter(tasks) {
+    const query = this.searchQuery.toLowerCase().trim();
+    if (!query) return tasks;
+    
+    return tasks.filter(task => {
+      const titleMatch = task.title.toLowerCase().includes(query);
+      const descriptionMatch = task.description && task.description.toLowerCase().includes(query);
+      const categoryMatch = task.category && task.category.toLowerCase().includes(query);
+      
+      return titleMatch || descriptionMatch || categoryMatch;
+    });
+  }
+
+  /**
+   * Handle search input changes
+   */
+  handleSearch(e) {
+    const query = e.target.value.trim();
+    this.searchQuery = query;
+    
+    // Show/hide clear button
+    const clearButton = document.getElementById('clearSearch');
+    clearButton.style.display = query ? 'flex' : 'none';
+    
+    // Debounce the search to avoid too many API calls
+    clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => {
+      this.loadTasks();
+      this.updateSearchResultsInfo();
+    }, 300);
+  }
+
+  /**
+   * Clear search input and results
+   */
+  clearSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const clearButton = document.getElementById('clearSearch');
+    const searchResultsInfo = document.getElementById('searchResultsInfo');
+    
+    searchInput.value = '';
+    this.searchQuery = '';
+    clearButton.style.display = 'none';
+    searchResultsInfo.style.display = 'none';
+    
+    this.loadTasks();
+  }
+
+  /**
+   * Update search results information display
+   */
+  updateSearchResultsInfo() {
+    const searchResultsInfo = document.getElementById('searchResultsInfo');
+    const searchResultsCount = document.getElementById('searchResultsCount');
+    const searchQuerySpan = document.getElementById('searchQuery');
+    
+    if (this.searchQuery.trim()) {
+      searchResultsCount.textContent = this.tasks.length;
+      searchQuerySpan.textContent = this.searchQuery;
+      searchResultsInfo.style.display = 'block';
+    } else {
+      searchResultsInfo.style.display = 'none';
+    }
+  }
+
+  /**
+   * Highlight search terms in text
+   */
+  highlightSearchTerms(text, query) {
+    if (!query || !text) return text;
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<span class="search-highlight">$1</span>');
   }
 
   /**
@@ -445,6 +540,7 @@ class TaskManager {
     if (this.tasks.length === 0) {
       container.innerHTML = '';
       emptyState.style.display = 'block';
+      this.updateSearchResultsInfo();
       return;
     }
     
@@ -454,6 +550,9 @@ class TaskManager {
     
     // Bind events for task items
     this.bindTaskEvents();
+    
+    // Update search results info
+    this.updateSearchResultsInfo();
   }
 
   /**
@@ -494,6 +593,19 @@ class TaskManager {
       dueDateHtml = `<div class="due-date ${dueDateClass}">📅 Due: ${dueDateStr} ${dueTimeStr}</div>`;
     }
     
+    // Apply search highlighting
+    const highlightedTitle = this.searchQuery ? 
+      this.highlightSearchTerms(this.escapeHtml(task.title), this.searchQuery) : 
+      this.escapeHtml(task.title);
+    
+    const highlightedDescription = task.description ? (this.searchQuery ? 
+      this.highlightSearchTerms(this.escapeHtml(task.description), this.searchQuery) : 
+      this.escapeHtml(task.description)) : '';
+    
+    const highlightedCategory = task.category && task.category !== 'general' ? (this.searchQuery ? 
+      this.highlightSearchTerms(this.escapeHtml(task.category), this.searchQuery) : 
+      this.escapeHtml(task.category)) : '';
+    
     // Task item classes
     const taskClasses = [
       'task-item',
@@ -514,8 +626,8 @@ class TaskManager {
             >
           </div>
           <div class="task-content">
-            <h3 class="task-title">${this.escapeHtml(task.title)}</h3>
-            ${task.description ? `<p class="task-description">${this.escapeHtml(task.description)}</p>` : ''}
+            <h3 class="task-title">${highlightedTitle}</h3>
+            ${task.description ? `<p class="task-description">${highlightedDescription}</p>` : ''}
             <div class="task-meta">
               <div class="task-info">
                 <div class="task-badges">
@@ -523,7 +635,7 @@ class TaskManager {
                     ${priorityIcon} ${(task.priority || 'medium').toUpperCase()}
                   </span>
                   ${task.category && task.category !== 'general' ? 
-                    `<span class="category-tag">🏷️ ${this.escapeHtml(task.category)}</span>` : ''}
+                    `<span class="category-tag">🏷️ ${highlightedCategory}</span>` : ''}
                 </div>
                 ${dueDateHtml}
                 <div class="task-date">

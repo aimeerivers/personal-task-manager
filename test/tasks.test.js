@@ -518,6 +518,189 @@ describe('Task API', () => {
     });
   });
 
+  // Search functionality tests
+  describe('GET /api/tasks - Search Functionality', () => {
+    beforeEach(async () => {
+      // Create diverse test tasks for search testing
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Buy groceries',
+          description: 'Need to buy milk, eggs, and bread',
+          category: 'Shopping'
+        });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Finish project report',
+          description: 'Complete the quarterly report for management',
+          category: 'Work'
+        });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Call mom',
+          description: 'Weekly check-in call with family',
+          category: 'Personal'
+        });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Exercise routine',
+          description: 'Go for a run in the park',
+          category: 'Health'
+        });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Book vacation',
+          description: 'Research and book summer vacation',
+          category: 'Travel'
+        });
+    });
+
+    it('should search tasks by title', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=groceries')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].title, 'Buy groceries');
+    });
+
+    it('should search tasks by description', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=quarterly')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].title, 'Finish project report');
+    });
+
+    it('should search tasks by category', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=work')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].category, 'Work');
+    });
+
+    it('should be case insensitive', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=VACATION')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].title, 'Book vacation');
+    });
+
+    it('should handle partial matches', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=call')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].title, 'Call mom');
+    });
+
+    it('should return multiple results when multiple tasks match', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=the')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.ok(response.body.data.length >= 2); // Should match "the quarterly report" and "the park"
+    });
+
+    it('should return empty array for no matches', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=nonexistent')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 0);
+    });
+
+    it('should handle empty search query', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 5); // Should return all tasks
+    });
+
+    it('should handle whitespace-only search query', async () => {
+      const response = await request(server)
+        .get('/api/tasks?search=   ')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 5); // Should return all tasks
+    });
+
+    it('should combine search with other filters', async () => {
+      // First create a task that matches both search and category filter
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Work meeting',
+          description: 'Weekly team meeting',
+          category: 'Work'
+        });
+
+      const response = await request(server)
+        .get('/api/tasks?search=meeting&category=Work')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 1);
+      assert.strictEqual(response.body.data[0].title, 'Work meeting');
+      assert.strictEqual(response.body.data[0].category, 'Work');
+    });
+
+    it('should maintain task sorting with search results', async () => {
+      // Create tasks with different priorities that match search
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Important meeting',
+          priority: 'high',
+          category: 'Work'
+        });
+
+      await request(server)
+        .post('/api/tasks')
+        .send({
+          title: 'Casual meeting',
+          priority: 'low',
+          category: 'Work'
+        });
+
+      const response = await request(server)
+        .get('/api/tasks?search=meeting')
+        .expect(200);
+
+      assert.strictEqual(response.body.success, true);
+      assert.strictEqual(response.body.data.length, 2); // 2 meeting tasks we just created
+      
+      // Should be sorted by priority (high first, then low)
+      const priorities = response.body.data.map(task => task.priority);
+      assert.strictEqual(priorities[0], 'high');
+      assert.strictEqual(priorities[1], 'low');
+    });
+  });
+
   // Categories endpoint tests
   describe('GET /api/tasks/categories', () => {
     it('should return empty array when no tasks exist', async () => {
