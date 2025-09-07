@@ -285,6 +285,108 @@ body {
   font-size: var(--font-size-sm);
 }
 
+/* Search */
+.search-section {
+  margin-bottom: var(--space-4);
+}
+
+.search-container {
+  background: white;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--space-6);
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.search-icon {
+  position: absolute;
+  left: var(--space-3);
+  font-size: var(--font-size-lg);
+  color: var(--gray-400);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-12) var(--space-3) var(--space-10);
+  border: 2px solid var(--gray-200);
+  border-radius: var(--border-radius-lg);
+  font-size: var(--font-size-base);
+  color: var(--gray-800);
+  transition: var(--transition);
+  background: white;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.search-input::placeholder {
+  color: var(--gray-400);
+}
+
+.clear-search {
+  position: absolute;
+  right: var(--space-3);
+  background: none;
+  border: none;
+  font-size: var(--font-size-lg);
+  color: var(--gray-400);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.clear-search:hover {
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+
+.search-results-info {
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
+  padding: var(--space-2) var(--space-3);
+  background: var(--gray-50);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--gray-200);
+}
+
+.search-results-info #searchQuery {
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.search-highlight {
+  background: rgba(255, 235, 59, 0.7);
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .search-container {
+    padding: var(--space-4);
+  }
+  
+  .search-input {
+    font-size: var(--font-size-sm);
+  }
+}
+
 /* Filters */
 .filters-section {
   margin-bottom: var(--space-6);

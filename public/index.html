@@ -102,6 +102,33 @@
 
                 <!-- Task Filters -->
                 <section class="filters-section">
+                    <!-- Search Section -->
+                    <div class="search-section">
+                        <div class="search-container">
+                            <div class="search-input-wrapper">
+                                <span class="search-icon">🔍</span>
+                                <input 
+                                    type="text" 
+                                    id="searchInput" 
+                                    placeholder="Search tasks by title, description, or category..." 
+                                    class="search-input"
+                                >
+                                <button 
+                                    type="button" 
+                                    id="clearSearch" 
+                                    class="clear-search" 
+                                    title="Clear search"
+                                    style="display: none;"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <div class="search-results-info" id="searchResultsInfo" style="display: none;">
+                                <span id="searchResultsCount">0</span> result(s) for "<span id="searchQuery"></span>"
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="filters-grid">
                         <div class="filter-group">
                             <h3 class="filter-group-title">Status</h3>
