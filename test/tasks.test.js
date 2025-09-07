@@ -753,6 +753,9 @@ describe('Task API', () => {
         })
         .expect(201);
 
+      // Wait a small amount to ensure different timestamps
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       // Update the task
       const response = await request(server)
         .put(`/api/tasks/${createResponse.body.data.id}`)
