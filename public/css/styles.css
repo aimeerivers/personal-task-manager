@@ -107,6 +107,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex: 1;
 }
 
 .logo {
@@ -144,6 +152,72 @@ body {
   font-size: var(--font-size-sm);
   color: var(--gray-600);
   margin-top: var(--space-1);
+}
+
+/* Active Timer Display */
+.active-timer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--success-light);
+  border: 2px solid var(--success);
+  border-radius: var(--border-radius-lg);
+  padding: var(--space-3) var(--space-4);
+  margin-left: auto;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.timer-icon {
+  font-size: var(--font-size-xl);
+}
+
+.timer-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 120px;
+}
+
+.timer-task {
+  font-weight: 600;
+  color: var(--gray-800);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.timer-duration {
+  font-weight: 700;
+  color: var(--success);
+  font-size: var(--font-size-lg);
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.timer-stop-btn {
+  background: var(--danger);
+  border: none;
+  border-radius: var(--border-radius);
+  color: white;
+  font-size: var(--font-size-lg);
+  padding: var(--space-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timer-stop-btn:hover {
+  background: var(--danger);
+  transform: scale(1.1);
 }
 
 /* Main Content */
@@ -1021,5 +1095,137 @@ body {
   
   .toast {
     max-width: none;
+  }
+}
+
+/* ============================================================================ */
+/* TIME TRACKING STYLES */
+/* ============================================================================ */
+
+/* Time tracking info in tasks */
+.time-tracking {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
+  background: var(--gray-100);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--border-radius);
+  margin: var(--space-2) 0;
+}
+
+.active-session {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--danger);
+  background: var(--danger-light);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--border-radius);
+  margin: var(--space-2) 0;
+  font-weight: 600;
+  animation: pulse 2s infinite;
+}
+
+.live-timer {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-weight: 700;
+}
+
+/* Timer controls */
+.timer-controls {
+  margin-right: var(--space-3);
+}
+
+.timer-btn {
+  background: var(--primary);
+  border: none;
+  border-radius: var(--border-radius);
+  color: white;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+}
+
+.timer-btn:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.timer-btn-start {
+  background: var(--success);
+}
+
+.timer-btn-start:hover {
+  background: #059669;
+}
+
+.timer-btn-stop {
+  background: var(--danger);
+}
+
+.timer-btn-stop:hover {
+  background: #dc2626;
+}
+
+/* Task actions with timer controls */
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Responsive timer elements */
+@media (max-width: 768px) {
+  .active-timer {
+    margin-left: 0;
+    margin-top: var(--space-4);
+    flex-direction: column;
+    gap: var(--space-2);
+    text-align: center;
+  }
+  
+  .timer-info {
+    min-width: auto;
+  }
+  
+  .timer-task {
+    max-width: 200px;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+  
+  .stats {
+    order: 1;
+  }
+  
+  .active-timer {
+    order: 2;
+    width: 100%;
+  }
+  
+  .timer-controls {
+    margin-right: 0;
+    margin-bottom: var(--space-2);
+  }
+  
+  .task-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .timer-btn {
+    width: 100%;
+    justify-content: center;
   }
 }

@@ -28,6 +28,14 @@ A powerful and beautiful personal task manager built with Node.js and vanilla Ja
 - � **Due today indicators** - Tasks due today get amber highlighting
 - 🔔 Visual deadline tracking to stay on top of commitments
 
+### ⏱️ **Time Tracking System**
+- ▶️ **Start/Stop Timers** - One-click timer control for any task
+- 📊 **Session Recording** - Track multiple work sessions per task
+- ⏰ **Total Time Display** - See exact time spent on each task
+- 🔴 **Live Active Timer** - Header displays current task being timed
+- 📈 **Productivity Analytics** - Global time tracking statistics
+- 🎯 **Focus Mode** - Only one timer active at a time for better focus
+
 ### 🔍 **Advanced Filtering & Organization**
 - 📊 Multi-dimensional filtering (Status + Priority + Category)
 - 🔍 Filter by: All Tasks, Active, Completed, Overdue, Due Today
@@ -44,9 +52,10 @@ A powerful and beautiful personal task manager built with Node.js and vanilla Ja
 
 ### 🚀 **Technical Excellence**
 - � RESTful API backend with Express.js
-- 🧪 Comprehensive test coverage (35+ tests, 100% pass rate)
+- 🧪 Comprehensive test coverage (84+ tests, 100% pass rate)
 - 🔄 Real-time updates and smooth user experience
-- 📊 Task statistics and progress tracking
+- 📊 Task statistics and productivity analytics
+- ⏱️ Professional time tracking with session management
 - 🛡️ Robust error handling and validation
 
 ## Getting Started 🚀

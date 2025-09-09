@@ -15,6 +15,14 @@ export class Task {
     this.dueDate = data.dueDate || null; // ISO string or null
     this.createdAt = data.createdAt || new Date().toISOString();
     this.updatedAt = data.updatedAt || new Date().toISOString();
+    
+    // Time tracking properties
+    this.timeTracking = data.timeTracking || {
+      totalTime: 0, // Total time spent in milliseconds
+      sessions: [], // Array of time sessions: [{startTime, endTime, duration}]
+      isActive: false, // Whether timer is currently running
+      activeSessionStart: null // Start time of current active session
+    };
   }
 
   /**
@@ -78,7 +86,8 @@ export class Task {
       category: this.category || 'general',
       dueDate: this.dueDate,
       createdAt: this.createdAt,
-      updatedAt: this.updatedAt
+      updatedAt: this.updatedAt,
+      timeTracking: this.timeTracking
     };
   }
 
@@ -307,6 +316,181 @@ export class Task {
       completed,
       active,
       completionRate: tasks.length > 0 ? (completed / tasks.length) * 100 : 0
+    };
+  }
+
+  // ============================================================================
+  // TIME TRACKING METHODS
+  // ============================================================================
+
+  /**
+   * Starts a time tracking session for this task
+   * @returns {Promise<Task>} Updated task instance
+   */
+  async startTimeTracking() {
+    if (this.timeTracking.isActive) {
+      throw new Error('Time tracking is already active for this task');
+    }
+
+    // Stop any other active timers first
+    await Task.stopAllActiveTimers();
+
+    this.timeTracking.isActive = true;
+    this.timeTracking.activeSessionStart = new Date().toISOString();
+    this.touch();
+
+    const tasks = await Task.findAll();
+    const taskIndex = tasks.findIndex(t => t.id === this.id);
+    
+    if (taskIndex === -1) {
+      throw new Error('Task not found');
+    }
+
+    tasks[taskIndex] = this;
+    await writeTasks(tasks.map(t => t.toJSON()));
+    
+    return this;
+  }
+
+  /**
+   * Stops the active time tracking session for this task
+   * @returns {Promise<Task>} Updated task instance
+   */
+  async stopTimeTracking() {
+    if (!this.timeTracking.isActive) {
+      throw new Error('No active time tracking session for this task');
+    }
+
+    const sessionEnd = new Date().toISOString();
+    const sessionStart = this.timeTracking.activeSessionStart;
+    const duration = new Date(sessionEnd) - new Date(sessionStart);
+
+    // Add session to history
+    this.timeTracking.sessions.push({
+      startTime: sessionStart,
+      endTime: sessionEnd,
+      duration: duration
+    });
+
+    // Update total time
+    this.timeTracking.totalTime += duration;
+
+    // Clear active session
+    this.timeTracking.isActive = false;
+    this.timeTracking.activeSessionStart = null;
+    this.touch();
+
+    const tasks = await Task.findAll();
+    const taskIndex = tasks.findIndex(t => t.id === this.id);
+    
+    if (taskIndex === -1) {
+      throw new Error('Task not found');
+    }
+
+    tasks[taskIndex] = this;
+    await writeTasks(tasks.map(t => t.toJSON()));
+    
+    return this;
+  }
+
+  /**
+   * Gets the current elapsed time for active session
+   * @returns {number} Elapsed time in milliseconds, or 0 if not active
+   */
+  getCurrentSessionTime() {
+    if (!this.timeTracking.isActive) {
+      return 0;
+    }
+    
+    return new Date() - new Date(this.timeTracking.activeSessionStart);
+  }
+
+  /**
+   * Formats time duration to human readable string
+   * @param {number} duration Duration in milliseconds
+   * @returns {string} Formatted time string (e.g., "2h 15m 30s")
+   */
+  static formatDuration(duration) {
+    if (!duration || duration < 0) return '0s';
+    
+    const seconds = Math.floor((duration / 1000) % 60);
+    const minutes = Math.floor((duration / (1000 * 60)) % 60);
+    const hours = Math.floor(duration / (1000 * 60 * 60));
+    
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+    
+    return parts.join(' ');
+  }
+
+  /**
+   * Gets formatted total time spent on this task
+   * @returns {string} Formatted time string
+   */
+  getFormattedTotalTime() {
+    return Task.formatDuration(this.timeTracking.totalTime);
+  }
+
+  /**
+   * Gets formatted current session time (if active)
+   * @returns {string} Formatted time string
+   */
+  getFormattedCurrentTime() {
+    return Task.formatDuration(this.getCurrentSessionTime());
+  }
+
+  /**
+   * Stops all active timers across all tasks
+   * @returns {Promise<Array>} Array of tasks that had active timers
+   */
+  static async stopAllActiveTimers() {
+    const tasks = await Task.findAll();
+    const activeTasks = tasks.filter(t => t.timeTracking.isActive);
+    
+    for (const task of activeTasks) {
+      await task.stopTimeTracking();
+    }
+    
+    return activeTasks;
+  }
+
+  /**
+   * Gets the currently active timer task (if any)
+   * @returns {Promise<Task|null>} Active task or null
+   */
+  static async getActiveTimerTask() {
+    const tasks = await Task.findAll();
+    return tasks.find(t => t.timeTracking.isActive) || null;
+  }
+
+  /**
+   * Gets time tracking statistics across all tasks
+   * @returns {Promise<Object>} Time tracking statistics
+   */
+  static async getTimeTrackingStats() {
+    const tasks = await Task.findAll();
+    
+    const totalTimeTracked = tasks.reduce((sum, task) => sum + task.timeTracking.totalTime, 0);
+    const tasksWithTime = tasks.filter(task => task.timeTracking.totalTime > 0);
+    const activeTask = tasks.find(task => task.timeTracking.isActive);
+    
+    // Calculate average session duration
+    const allSessions = tasks.flatMap(task => task.timeTracking.sessions);
+    const averageSessionDuration = allSessions.length > 0 
+      ? allSessions.reduce((sum, session) => sum + session.duration, 0) / allSessions.length 
+      : 0;
+    
+    return {
+      totalTimeTracked,
+      formattedTotalTime: Task.formatDuration(totalTimeTracked),
+      tasksWithTimeCount: tasksWithTime.length,
+      totalSessions: allSessions.length,
+      averageSessionDuration,
+      formattedAverageSession: Task.formatDuration(averageSessionDuration),
+      activeTask: activeTask ? activeTask.id : null,
+      activeTaskTitle: activeTask ? activeTask.title : null
     };
   }
 }

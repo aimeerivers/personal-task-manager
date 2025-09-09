@@ -256,4 +256,150 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// ============================================================================
+// TIME TRACKING ROUTES
+// ============================================================================
+
+/**
+ * Start time tracking for a task
+ * POST /api/tasks/:id/timer/start
+ */
+router.post('/:id/timer/start', async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: 'Task not found'
+      });
+    }
+
+    await task.startTimeTracking();
+
+    res.json({
+      success: true,
+      message: 'Time tracking started',
+      task: task.toJSON()
+    });
+  } catch (error) {
+    console.error('Error starting time tracking:', error);
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Failed to start time tracking'
+    });
+  }
+});
+
+/**
+ * Stop time tracking for a task
+ * POST /api/tasks/:id/timer/stop
+ */
+router.post('/:id/timer/stop', async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: 'Task not found'
+      });
+    }
+
+    await task.stopTimeTracking();
+
+    res.json({
+      success: true,
+      message: 'Time tracking stopped',
+      task: task.toJSON()
+    });
+  } catch (error) {
+    console.error('Error stopping time tracking:', error);
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Failed to stop time tracking'
+    });
+  }
+});
+
+/**
+ * Get current active timer
+ * GET /api/tasks/timer/active
+ */
+router.get('/timer/active', async (req, res) => {
+  try {
+    const activeTask = await Task.getActiveTimerTask();
+    
+    if (!activeTask) {
+      return res.json({
+        success: true,
+        activeTimer: null
+      });
+    }
+
+    res.json({
+      success: true,
+      activeTimer: {
+        taskId: activeTask.id,
+        title: activeTask.title,
+        startTime: activeTask.timeTracking.activeSessionStart,
+        currentDuration: activeTask.getCurrentSessionTime(),
+        formattedDuration: activeTask.getFormattedCurrentTime()
+      }
+    });
+  } catch (error) {
+    console.error('Error getting active timer:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get active timer'
+    });
+  }
+});
+
+/**
+ * Stop all active timers
+ * POST /api/tasks/timer/stop-all
+ */
+router.post('/timer/stop-all', async (req, res) => {
+  try {
+    const stoppedTasks = await Task.stopAllActiveTimers();
+    
+    res.json({
+      success: true,
+      message: `Stopped ${stoppedTasks.length} active timer(s)`,
+      stoppedTasks: stoppedTasks.map(task => ({
+        id: task.id,
+        title: task.title
+      }))
+    });
+  } catch (error) {
+    console.error('Error stopping all timers:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to stop all timers'
+    });
+  }
+});
+
+/**
+ * Get time tracking statistics
+ * GET /api/tasks/timer/stats
+ */
+router.get('/timer/stats', async (req, res) => {
+  try {
+    const stats = await Task.getTimeTrackingStats();
+    
+    res.json({
+      success: true,
+      stats: stats
+    });
+  } catch (error) {
+    console.error('Error getting time tracking stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get time tracking statistics'
+    });
+  }
+});
+
 export default router;

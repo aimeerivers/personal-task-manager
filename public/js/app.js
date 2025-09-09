@@ -22,6 +22,9 @@ class TaskManager {
     this.loadTasks();
     this.loadStats();
     this.loadCategories();
+    this.loadTimeTrackingStats();
+    this.updateActiveTimer();
+    this.startTimerUpdate();
   }
 
   /**
@@ -63,6 +66,8 @@ class TaskManager {
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+
+    // Stop active timer button (note: this is set up dynamically in updateActiveTimer)
   }
 
   /**
@@ -243,6 +248,9 @@ class TaskManager {
       if (response.success) {
         this.updateStats(response.data);
       }
+      
+      // Also load time tracking stats
+      await this.loadTimeTrackingStats();
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -638,12 +646,16 @@ class TaskManager {
                     `<span class="category-tag">🏷️ ${highlightedCategory}</span>` : ''}
                 </div>
                 ${dueDateHtml}
+                ${this.renderTimeTracking(task)}
                 <div class="task-date">
                   Created: ${createdDate}
                   ${isUpdated ? ` • Updated: ${updatedDate}` : ''}
                 </div>
               </div>
               <div class="task-actions">
+                <div class="timer-controls">
+                  ${this.renderTimerButton(task)}
+                </div>
                 <button class="task-action-btn edit-btn" data-task-id="${task.id}">
                   ✏️ Edit
                 </button>
@@ -656,6 +668,78 @@ class TaskManager {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * Render time tracking information for a task
+   */
+  renderTimeTracking(task) {
+    if (!task.timeTracking || (!task.timeTracking.totalTime && !task.timeTracking.isActive)) {
+      return '';
+    }
+
+    const totalTime = this.formatDuration(task.timeTracking.totalTime);
+    const activeSession = task.timeTracking.isActive ? 
+      this.formatDuration(task.timeTracking.currentSessionTime || 0) : '';
+    
+    let timeTrackingHtml = '';
+    
+    if (task.timeTracking.totalTime > 0) {
+      timeTrackingHtml += `<div class="time-tracking">⏰ Total: ${totalTime}</div>`;
+    }
+    
+    if (task.timeTracking.isActive) {
+      timeTrackingHtml += `<div class="active-session">🔴 Active: <span class="live-timer" data-task-id="${task.id}">${activeSession}</span></div>`;
+    }
+    
+    return timeTrackingHtml;
+  }
+
+  /**
+   * Render timer button for a task
+   */
+  renderTimerButton(task) {
+    if (!task.timeTracking) {
+      task.timeTracking = {
+        totalTime: 0,
+        sessions: [],
+        isActive: false,
+        activeSessionStart: null
+      };
+    }
+
+    if (task.timeTracking.isActive) {
+      return `
+        <button class="timer-btn timer-btn-stop" data-task-id="${task.id}" title="Stop Timer">
+          ⏹️ Stop
+        </button>
+      `;
+    } else {
+      return `
+        <button class="timer-btn timer-btn-start" data-task-id="${task.id}" title="Start Timer">
+          ▶️ Start
+        </button>
+      `;
+    }
+  }
+
+  /**
+   * Format duration from milliseconds to human readable format
+   */
+  formatDuration(ms) {
+    if (!ms || ms < 0) return '0s';
+    
+    const seconds = Math.floor((ms / 1000) % 60);
+    const minutes = Math.floor((ms / (1000 * 60)) % 60);
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
   }
 
   /**
@@ -694,6 +778,21 @@ class TaskManager {
         const task = this.tasks.find(t => t.id === taskId);
         if (task) {
           this.deleteTask(taskId, task.title);
+        }
+      });
+    });
+
+    // Timer buttons
+    const timerButtons = document.querySelectorAll('.timer-btn');
+    timerButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const taskId = e.target.dataset.taskId;
+        if (e.target.classList.contains('timer-btn-start')) {
+          this.startTimer(taskId);
+        } else if (e.target.classList.contains('timer-btn-stop')) {
+          this.stopTimer(taskId);
         }
       });
     });
@@ -786,6 +885,190 @@ class TaskManager {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ============================================================================
+  // TIME TRACKING METHODS
+  // ============================================================================
+
+  /**
+   * Start timer for a task
+   */
+  async startTimer(taskId) {
+    try {
+      this.showLoading(true);
+      const response = await fetch(`/api/tasks/${taskId}/timer/start`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        this.showToast(`Timer started for "${result.task.title}"`, 'success');
+        await this.loadTasks();
+        await this.loadStats();
+        await this.updateActiveTimer();
+        this.startTimerUpdate();
+      } else {
+        throw new Error(result.error || 'Failed to start timer');
+      }
+    } catch (error) {
+      console.error('Error starting timer:', error);
+      this.showToast('Failed to start timer: ' + error.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  /**
+   * Stop timer for a task
+   */
+  async stopTimer(taskId) {
+    try {
+      this.showLoading(true);
+      const response = await fetch(`/api/tasks/${taskId}/timer/stop`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        this.showToast(`Timer stopped for "${result.task.title}"`, 'success');
+        await this.loadTasks();
+        await this.loadStats();
+        await this.updateActiveTimer();
+        this.stopTimerUpdate();
+      } else {
+        throw new Error(result.error || 'Failed to stop timer');
+      }
+    } catch (error) {
+      console.error('Error stopping timer:', error);
+      this.showToast('Failed to stop timer: ' + error.message, 'error');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  /**
+   * Update active timer display
+   */
+  async updateActiveTimer() {
+    try {
+      const response = await fetch('/api/tasks/timer/active');
+      const result = await response.json();
+      
+      const activeTimerEl = document.getElementById('activeTimer');
+      const activeTimerTask = document.getElementById('activeTimerTask');
+      const activeTimerDuration = document.getElementById('activeTimerDuration');
+      const stopActiveTimer = document.getElementById('stopActiveTimer');
+      
+      if (result.success && result.activeTimer) {
+        const timer = result.activeTimer;
+        activeTimerTask.textContent = timer.title;
+        activeTimerDuration.textContent = this.formatTimerDisplay(timer.currentDuration);
+        
+        stopActiveTimer.onclick = () => this.stopTimer(timer.taskId);
+        
+        activeTimerEl.style.display = 'flex';
+        this.activeTimerData = timer;
+      } else {
+        activeTimerEl.style.display = 'none';
+        this.activeTimerData = null;
+      }
+    } catch (error) {
+      console.error('Error updating active timer:', error);
+    }
+  }
+
+  /**
+   * Format timer display (HH:MM:SS format)
+   */
+  formatTimerDisplay(ms) {
+    if (!ms || ms < 0) return '00:00:00';
+    
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Start regular timer updates
+   */
+  startTimerUpdate() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+    }
+    
+    this.timerInterval = setInterval(() => {
+      this.updateTimerDisplays();
+    }, 1000);
+  }
+
+  /**
+   * Stop timer updates
+   */
+  stopTimerUpdate() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  /**
+   * Update all timer displays
+   */
+  updateTimerDisplays() {
+    // Update active timer in header
+    if (this.activeTimerData) {
+      const startTime = new Date(this.activeTimerData.startTime);
+      const currentDuration = Date.now() - startTime.getTime();
+      
+      const activeTimerDuration = document.getElementById('activeTimerDuration');
+      if (activeTimerDuration) {
+        activeTimerDuration.textContent = this.formatTimerDisplay(currentDuration);
+      }
+    }
+    
+    // Update live timers in task list
+    const liveTimers = document.querySelectorAll('.live-timer');
+    liveTimers.forEach(timer => {
+      const taskId = timer.dataset.taskId;
+      if (this.activeTimerData && this.activeTimerData.taskId === taskId) {
+        const startTime = new Date(this.activeTimerData.startTime);
+        const currentDuration = Date.now() - startTime.getTime();
+        timer.textContent = this.formatDuration(currentDuration);
+      }
+    });
+  }
+
+  /**
+   * Load time tracking statistics
+   */
+  async loadTimeTrackingStats() {
+    try {
+      const response = await fetch('/api/tasks/timer/stats');
+      const result = await response.json();
+      
+      if (result.success) {
+        const totalTimeEl = document.getElementById('totalTimeTracked');
+        if (totalTimeEl) {
+          totalTimeEl.textContent = result.stats.formattedTotalTime || '0h';
+        }
+      }
+    } catch (error) {
+      console.error('Error loading time tracking stats:', error);
+    }
   }
 }
 
