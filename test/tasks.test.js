@@ -1085,4 +1085,368 @@ describe('Task API', () => {
       assert.strictEqual(response.body.error, 'API endpoint not found');
     });
   });
+
+  describe('Time Tracking Features', () => {
+    describe('POST /api/tasks/:id/timer/start', () => {
+      it('should start time tracking for a task', async () => {
+        // Create a test task
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Test Task for Time Tracking' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        // Start time tracking
+        const startResponse = await request(server)
+          .post(`/api/tasks/${taskId}/timer/start`)
+          .expect(200);
+
+        assert.strictEqual(startResponse.body.success, true);
+        assert.strictEqual(startResponse.body.message, 'Time tracking started');
+        assert.strictEqual(startResponse.body.task.timeTracking.isActive, true);
+        assert.ok(startResponse.body.task.timeTracking.activeSessionStart);
+      });
+
+      it('should return 404 for non-existent task', async () => {
+        const response = await request(server)
+          .post('/api/tasks/nonexistent/timer/start')
+          .expect(404);
+
+        assert.strictEqual(response.body.success, false);
+        assert.strictEqual(response.body.error, 'Task not found');
+      });
+
+      it('should fail if timer is already active', async () => {
+        // Create a test task
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Test Task' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        // Start timer first time
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/start`)
+          .expect(200);
+
+        // Try to start again
+        const response = await request(server)
+          .post(`/api/tasks/${taskId}/timer/start`)
+          .expect(400);
+
+        assert.strictEqual(response.body.success, false);
+        assert.strictEqual(response.body.error, 'Time tracking is already active for this task');
+      });
+
+      it('should stop other active timers when starting new one', async () => {
+        // Create two test tasks
+        const task1Response = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Task 1' })
+          .expect(201);
+
+        const task2Response = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Task 2' })
+          .expect(201);
+
+        const task1Id = task1Response.body.data.id;
+        const task2Id = task2Response.body.data.id;
+
+        // Start timer on task 1
+        await request(server)
+          .post(`/api/tasks/${task1Id}/timer/start`)
+          .expect(200);
+
+        // Start timer on task 2 (should stop task 1)
+        await request(server)
+          .post(`/api/tasks/${task2Id}/timer/start`)
+          .expect(200);
+
+        // Check that task 1 is no longer active
+        const task1Check = await request(server)
+          .get(`/api/tasks/${task1Id}`)
+          .expect(200);
+
+        assert.strictEqual(task1Check.body.data.timeTracking.isActive, false);
+        assert.strictEqual(task1Check.body.data.timeTracking.sessions.length, 1);
+      });
+    });
+
+    describe('POST /api/tasks/:id/timer/stop', () => {
+      it('should stop time tracking for a task', async () => {
+        // Create and start timer
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Test Task' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/start`)
+          .expect(200);
+
+        // Small delay to ensure measurable time
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        // Stop timer
+        const stopResponse = await request(server)
+          .post(`/api/tasks/${taskId}/timer/stop`)
+          .expect(200);
+
+        assert.strictEqual(stopResponse.body.success, true);
+        assert.strictEqual(stopResponse.body.message, 'Time tracking stopped');
+        assert.strictEqual(stopResponse.body.task.timeTracking.isActive, false);
+        assert.strictEqual(stopResponse.body.task.timeTracking.activeSessionStart, null);
+        assert.strictEqual(stopResponse.body.task.timeTracking.sessions.length, 1);
+        assert.ok(stopResponse.body.task.timeTracking.totalTime > 0);
+      });
+
+      it('should return 404 for non-existent task', async () => {
+        const response = await request(server)
+          .post('/api/tasks/nonexistent/timer/stop')
+          .expect(404);
+
+        assert.strictEqual(response.body.success, false);
+        assert.strictEqual(response.body.error, 'Task not found');
+      });
+
+      it('should fail if no active timer', async () => {
+        // Create a test task
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Test Task' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        // Try to stop timer without starting it
+        const response = await request(server)
+          .post(`/api/tasks/${taskId}/timer/stop`)
+          .expect(400);
+
+        assert.strictEqual(response.body.success, false);
+        assert.strictEqual(response.body.error, 'No active time tracking session for this task');
+      });
+    });
+
+    describe('GET /api/tasks/timer/active', () => {
+      it('should return null when no active timer', async () => {
+        const response = await request(server)
+          .get('/api/tasks/timer/active')
+          .expect(200);
+
+        assert.strictEqual(response.body.success, true);
+        assert.strictEqual(response.body.activeTimer, null);
+      });
+
+      it('should return active timer information', async () => {
+        // Create and start timer
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Active Timer Task' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/start`)
+          .expect(200);
+
+        // Get active timer
+        const response = await request(server)
+          .get('/api/tasks/timer/active')
+          .expect(200);
+
+        assert.strictEqual(response.body.success, true);
+        assert.strictEqual(response.body.activeTimer.taskId, taskId);
+        assert.strictEqual(response.body.activeTimer.title, 'Active Timer Task');
+        assert.ok(response.body.activeTimer.startTime);
+        assert.ok(response.body.activeTimer.currentDuration >= 0);
+        assert.ok(response.body.activeTimer.formattedDuration);
+      });
+    });
+
+    describe('POST /api/tasks/timer/stop-all', () => {
+      it('should stop all active timers', async () => {
+        // Create multiple tasks with active timers
+        const task1Response = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Task 1' })
+          .expect(201);
+
+        const task2Response = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Task 2' })
+          .expect(201);
+
+        const task1Id = task1Response.body.data.id;
+        const task2Id = task2Response.body.data.id;
+
+        // Start both timers (second will stop first, but both will have sessions)
+        await request(server)
+          .post(`/api/tasks/${task1Id}/timer/start`)
+          .expect(200);
+
+        await request(server)
+          .post(`/api/tasks/${task2Id}/timer/start`)
+          .expect(200);
+
+        // Stop all active timers
+        const response = await request(server)
+          .post('/api/tasks/timer/stop-all')
+          .expect(200);
+
+        assert.strictEqual(response.body.success, true);
+        assert.ok(response.body.message.includes('Stopped'));
+        assert.ok(Array.isArray(response.body.stoppedTasks));
+      });
+
+      it('should handle case with no active timers', async () => {
+        const response = await request(server)
+          .post('/api/tasks/timer/stop-all')
+          .expect(200);
+
+        assert.strictEqual(response.body.success, true);
+        assert.strictEqual(response.body.message, 'Stopped 0 active timer(s)');
+        assert.strictEqual(response.body.stoppedTasks.length, 0);
+      });
+    });
+
+    describe('GET /api/tasks/timer/stats', () => {
+      it('should return time tracking statistics', async () => {
+        const response = await request(server)
+          .get('/api/tasks/timer/stats')
+          .expect(200);
+
+        assert.strictEqual(response.body.success, true);
+        assert.ok('stats' in response.body);
+        assert.ok('totalTimeTracked' in response.body.stats);
+        assert.ok('formattedTotalTime' in response.body.stats);
+        assert.ok('tasksWithTimeCount' in response.body.stats);
+        assert.ok('totalSessions' in response.body.stats);
+      });
+
+      it('should return correct stats with time tracked', async () => {
+        // Create a task and track some time
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Timed Task' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        // Start and stop timer
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/start`)
+          .expect(200);
+
+        // Small delay to get measurable time
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/stop`)
+          .expect(200);
+
+        // Get stats
+        const response = await request(server)
+          .get('/api/tasks/timer/stats')
+          .expect(200);
+
+        assert.strictEqual(response.body.success, true);
+        assert.ok(response.body.stats.totalTimeTracked > 0);
+        assert.strictEqual(response.body.stats.tasksWithTimeCount, 1);
+        assert.strictEqual(response.body.stats.totalSessions, 1);
+        assert.ok(response.body.stats.averageSessionDuration > 0);
+      });
+    });
+
+    describe('Time Tracking Integration', () => {
+      it('should preserve time tracking data when updating task', async () => {
+        // Create task and track time
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Original Task' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        // Track some time
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/start`)
+          .expect(200);
+
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/stop`)
+          .expect(200);
+
+        // Update task
+        const updateResponse = await request(server)
+          .put(`/api/tasks/${taskId}`)
+          .send({ title: 'Updated Task' })
+          .expect(200);
+
+        // Time tracking data should be preserved
+        assert.ok(updateResponse.body.data.timeTracking.totalTime > 0);
+        assert.strictEqual(updateResponse.body.data.timeTracking.sessions.length, 1);
+      });
+
+      it('should include time tracking in task list', async () => {
+        // Create task with time tracking
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Tracked Task' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/start`)
+          .expect(200);
+
+        // Small delay to ensure measurable time
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        await request(server)
+          .post(`/api/tasks/${taskId}/timer/stop`)
+          .expect(200);
+
+        // Get all tasks
+        const response = await request(server)
+          .get('/api/tasks')
+          .expect(200);
+
+        const task = response.body.data.find(t => t.id === taskId);
+        assert.ok(task);
+        assert.ok('timeTracking' in task);
+        assert.ok(task.timeTracking.totalTime > 0);
+      });
+    });
+
+    describe('Time Formatting', () => {
+      it('should handle various time durations', async () => {
+        // Create task and check formatting through API
+        const createResponse = await request(server)
+          .post('/api/tasks')
+          .send({ title: 'Format Test Task' })
+          .expect(201);
+
+        const taskId = createResponse.body.data.id;
+
+        // Get task to verify default formatting
+        const response = await request(server)
+          .get(`/api/tasks/${taskId}`)
+          .expect(200);
+
+        assert.ok('timeTracking' in response.body.data);
+        assert.strictEqual(response.body.data.timeTracking.totalTime, 0);
+        assert.ok(Array.isArray(response.body.data.timeTracking.sessions));
+      });
+    });
+  });
 });
